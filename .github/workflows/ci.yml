@@ -20,7 +20,7 @@ jobs:
       # Activa las pruebas de contrato de natsbus contra un NATS real.
       JAPPI_TEST_NATS_URL: nats://localhost:4222
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v5
         with:
@@ -52,7 +52,7 @@ jobs:
     name: deployer contra Kubernetes real (kind)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v5
         with:
@@ -78,7 +78,7 @@ jobs:
     name: imágenes Docker
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: build
         run: |
