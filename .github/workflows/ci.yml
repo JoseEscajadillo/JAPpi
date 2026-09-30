@@ -1,92 +1,157 @@
-name: ci
+name: CI
 
 on:
-  pull_request:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  codeql:
+    name: CodeQL SAST
+    runs-on: ubuntu-latest
+    permissions:
+      # CodeQL consulta su propia ejecución para informar resultados.
+      actions: read
+      contents: read
+      pull-requests: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: go
+          build-mode: manual
+
+      # CodeQL necesita compilar los paquetes Go para analizar el código fuente.
+      - name: Build for CodeQL
+        run: go build ./...
+
+      - name: Analyze with CodeQL
+        uses: github/codeql-action/analyze@v4
+
   go:
-    name: go (formato, vet, pruebas, vulnerabilidades)
+    name: Go checks
     runs-on: ubuntu-latest
     env:
-      # Activa las pruebas de contrato de natsbus contra un NATS real.
       JAPPI_TEST_NATS_URL: nats://localhost:4222
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache-dependency-path: go.sum
 
-      - name: NATS con JetStream
-        run: docker run -d --name nats -p 4222:4222 nats:2.11-alpine -js
+      # gofmt es el formateador del proyecto; falla si algún archivo requiere formato.
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
 
-      - name: gofmt
-        run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
 
-      - name: vet
+      - name: Vet
         run: go vet ./...
 
-      - name: test (incluye reglas hexagonales)
-        run: go test -race ./...
+      # JetStream permite ejecutar las pruebas de contrato contra un NATS real.
+      - name: Start NATS with JetStream
+        run: |
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2.11-alpine -js -sd /data -m 8222
+          for attempt in {1..30}; do
+            if curl --fail --silent "http://localhost:8222/healthz?js-enabled-only=true"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs nats
+          exit 1
 
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      # Ejecuta unitarias, arquitectura, race e integración; publica el resumen de cobertura.
+      - name: Test and report coverage
+        run: |
+          go test -race -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: build de todos los servicios
+      - name: Check Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      # Compila cada comando del monorepo, incluidos los servicios nuevos.
+      - name: Build services
         run: |
           for dir in services/*/cmd/*/; do
-            go build -o bin/ "./$dir"
+            command_name="$(basename "$dir")"
+            go build -o "$RUNNER_TEMP/$command_name" "./${dir%/}"
           done
-          ls -la bin/
 
   kubernetes:
-    name: deployer contra Kubernetes real (kind)
+    name: Deployer integration (kind)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache-dependency-path: go.sum
 
-      - name: clúster kind
-        uses: helm/kind-action@v1
+      - name: Start kind cluster
+        uses: helm/kind-action@v1.14.0
         with:
           cluster_name: jappi-ci
 
-      - name: prueba de integración del deployer
+      - name: Run deployer integration tests
         env:
           JAPPI_TEST_KUBECONFIG: /home/runner/.kube/config
         run: go test -count=1 -v -run Integration ./services/deployer/...
 
-      - name: diagnóstico si falla
+      - name: Diagnose cluster on failure
         if: failure()
         run: |
           kubectl get all,networkpolicies,resourcequotas -A -l app.kubernetes.io/managed-by=jappi || true
           kubectl get events -A --sort-by=.lastTimestamp | tail -40 || true
 
   images:
-    name: imágenes Docker
+    name: Docker images
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
 
-      - name: build
+      - name: Build service images
         run: |
           for dir in services/*/cmd/*/; do
-            svc=$(basename "$dir")
-            [ "$svc" = "jappi-detect" ] && continue
-            echo "::group::$svc"
-            docker build --build-arg SERVICE="$svc" -t "jappi-$svc:ci" .
+            service="$(basename "$dir")"
+            [ "$service" = "jappi-detect" ] && continue
+            echo "::group::$service"
+            docker build --build-arg SERVICE="$service" -t "jappi-$service:ci" .
             echo "::endgroup::"
           done
           docker images | grep jappi-

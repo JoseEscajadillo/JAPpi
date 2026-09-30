@@ -59,10 +59,11 @@ func TestAdvanceToToleratesOutOfOrderEvents(t *testing.T) {
 }
 
 func TestIDForIsDeterministic(t *testing.T) {
-	if deployment.IDFor("p", "s", "a") != deployment.IDFor("p", "s", "a") {
+	id := deployment.IDFor("p", "s", "a")
+	if got := deployment.IDFor("p", "s", "a"); got != id {
 		t.Error("mismo servicio y commit deben dar el mismo ID")
 	}
-	if deployment.IDFor("p", "s", "a") == deployment.IDFor("p", "s", "b") {
+	if got := deployment.IDFor("p", "s", "b"); got == id {
 		t.Error("commits distintos deben dar IDs distintos")
 	}
 }
