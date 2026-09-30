@@ -1,43 +1,107 @@
-name: ci
+name: CI
 
 on:
-  pull_request:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 permissions:
   contents: read
 
-jobs:
-  go:
-    runs-on: ubuntu-latest
-    env:
-      # Activa las pruebas de contrato de natsbus contra un NATS real.
-      JAPPI_TEST_NATS_URL: nats://localhost:4222
-    steps:
-      - uses: actions/checkout@v4
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
-      - uses: actions/setup-go@v5
+jobs:
+  codeql:
+    name: CodeQL SAST
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache-dependency-path: go.sum
 
-      - name: NATS con JetStream
-        run: docker run -d --name nats -p 4222:4222 nats:2.11-alpine -js
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: go
+          build-mode: manual
 
-      - name: gofmt
-        run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      # CodeQL necesita compilar los paquetes Go para analizar el código fuente.
+      - name: Build for CodeQL
+        run: go build ./...
 
-      - name: vet
+      - name: Analyze with CodeQL
+        uses: github/codeql-action/analyze@v4
+
+  go:
+    name: Go checks
+    runs-on: ubuntu-latest
+    env:
+      JAPPI_TEST_NATS_URL: nats://localhost:4222
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # gofmt es el formateador del proyecto; falla si algún archivo requiere formato.
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
+
+      - name: Vet
         run: go vet ./...
 
-      - name: test (incluye reglas hexagonales)
-        run: go test -race ./...
-
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-
-      - name: build
+      # JetStream permite ejecutar las pruebas de contrato contra un NATS real.
+      - name: Start NATS with JetStream
         run: |
-          for svc in control-plane github-integration; do
-            go build -o bin/$svc ./services/$svc/cmd/$svc
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2.11-alpine -js -sd /data -m 8222
+          for attempt in {1..30}; do
+            if curl --fail --silent "http://localhost:8222/healthz?js-enabled-only=true"; then
+              exit 0
+            fi
+            sleep 1
           done
+          docker logs nats
+          exit 1
+
+      # Ejecuta pruebas unitarias, de arquitectura, con race y de integración; publica cobertura.
+      - name: Test and report coverage
+        run: |
+          go test -race -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Check Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      # Compila cada servicio para detectar errores de compilación y enlace.
+      - name: Build services
+        run: |
+          go build -o "$RUNNER_TEMP/control-plane" ./services/control-plane/cmd/control-plane
+          go build -o "$RUNNER_TEMP/github-integration" ./services/github-integration/cmd/github-integration
