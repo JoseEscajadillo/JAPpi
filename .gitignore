@@ -6,9 +6,9 @@ coverage.out
 
 # Node / Next.js
 node_modules/
-.next/
+web/**/.next/
 .turbo/
-out/
+web/**/out/
 
 # Secretos locales
 .env
