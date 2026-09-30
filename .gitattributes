@@ -1,0 +1,4 @@
+# Finales de línea LF en el repo sin importar el sistema operativo.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
