@@ -4,6 +4,7 @@ package events
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	contracts "github.com/JoseEscajadillo/JAPpi/pkg/contracts/events"
@@ -20,24 +21,49 @@ type Subscriber interface {
 
 // Consumer conecta el bus con los casos de uso.
 type Consumer struct {
-	Bus        Subscriber
-	HandlePush app.HandlePush
+	Bus                    Subscriber
+	HandlePush             app.HandlePush
+	HandleBuildSucceeded   app.HandleBuildSucceeded
+	HandleBuildFailed      app.HandleBuildFailed
+	HandleDeploymentStatus app.HandleDeploymentStatus
 }
 
 // Start se suscribe y devuelve; el consumo sigue hasta que ctx se cancela.
 func (c Consumer) Start(ctx context.Context) error {
-	return c.Bus.Subscribe(ctx, ConsumerName, []contracts.Type{contracts.RepoPushed}, c.onRepoPushed)
+	return c.Bus.Subscribe(ctx, ConsumerName, []contracts.Type{
+		contracts.RepoPushed,
+		contracts.BuildSucceeded,
+		contracts.BuildFailed,
+		contracts.DeploymentStatusChanged,
+	}, c.dispatch)
 }
 
-func (c Consumer) onRepoPushed(ctx context.Context, e contracts.Envelope) error {
-	var push contracts.RepoPushedPayload
-	if err := e.Decode(&push); err != nil {
+func (c Consumer) dispatch(ctx context.Context, e contracts.Envelope) error {
+	switch e.Type {
+	case contracts.RepoPushed:
+		return handle(ctx, e, func(ctx context.Context, p contracts.RepoPushedPayload) error {
+			n, err := c.HandlePush.Execute(ctx, p)
+			if err == nil {
+				slog.Info("push procesado", "event", e.ID, "repo", p.Repository, "branch", p.Branch, "commit", p.CommitSHA, "builds", n)
+			}
+			return err
+		})
+	case contracts.BuildSucceeded:
+		return handle(ctx, e, c.HandleBuildSucceeded.Execute)
+	case contracts.BuildFailed:
+		return handle(ctx, e, c.HandleBuildFailed.Execute)
+	case contracts.DeploymentStatusChanged:
+		return handle(ctx, e, c.HandleDeploymentStatus.Execute)
+	default:
+		return contracts.Permanent(fmt.Errorf("tipo de evento no esperado: %s", e.Type))
+	}
+}
+
+// handle decodifica el payload del tipo P y llama al caso de uso.
+func handle[P any](ctx context.Context, e contracts.Envelope, execute func(context.Context, P) error) error {
+	var p P
+	if err := e.Decode(&p); err != nil {
 		return contracts.Permanent(err)
 	}
-	n, err := c.HandlePush.Execute(ctx, push)
-	if err != nil {
-		return err
-	}
-	slog.Info("push procesado", "repo", push.Repository, "branch", push.Branch, "commit", push.CommitSHA, "builds", n)
-	return nil
+	return execute(ctx, p)
 }

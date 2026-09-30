@@ -8,8 +8,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   go:
+    name: go (formato, vet, pruebas, vulnerabilidades)
     runs-on: ubuntu-latest
     env:
       # Activa las pruebas de contrato de natsbus contra un NATS real.
@@ -36,8 +41,52 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
+      - name: build de todos los servicios
+        run: |
+          for dir in services/*/cmd/*/; do
+            go build -o bin/ "./$dir"
+          done
+          ls -la bin/
+
+  kubernetes:
+    name: deployer contra Kubernetes real (kind)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: clúster kind
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: jappi-ci
+
+      - name: prueba de integración del deployer
+        env:
+          JAPPI_TEST_KUBECONFIG: /home/runner/.kube/config
+        run: go test -count=1 -v -run Integration ./services/deployer/...
+
+      - name: diagnóstico si falla
+        if: failure()
+        run: |
+          kubectl get all,networkpolicies,resourcequotas -A -l app.kubernetes.io/managed-by=jappi || true
+          kubectl get events -A --sort-by=.lastTimestamp | tail -40 || true
+
+  images:
+    name: imágenes Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: build
         run: |
-          for svc in control-plane github-integration; do
-            go build -o bin/$svc ./services/$svc/cmd/$svc
+          for dir in services/*/cmd/*/; do
+            svc=$(basename "$dir")
+            [ "$svc" = "jappi-detect" ] && continue
+            echo "::group::$svc"
+            docker build --build-arg SERVICE="$svc" -t "jappi-$svc:ci" .
+            echo "::endgroup::"
           done
+          docker images | grep jappi-

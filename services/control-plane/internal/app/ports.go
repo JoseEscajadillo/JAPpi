@@ -8,12 +8,16 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 
 	"github.com/JoseEscajadillo/JAPpi/pkg/contracts/events"
 	"github.com/JoseEscajadillo/JAPpi/services/control-plane/internal/domain/deployment"
 	"github.com/JoseEscajadillo/JAPpi/services/control-plane/internal/domain/project"
 )
+
+// ErrNotFound lo devuelven los adaptadores cuando no existe lo que se busca.
+var ErrNotFound = errors.New("no encontrado")
 
 // ProjectFinder encuentra los proyectos que siguen una rama de un repo.
 type ProjectFinder interface {
@@ -34,4 +38,16 @@ type EventPublisher interface {
 // RepoSource entrega los archivos de un repo en un commit o rama.
 type RepoSource interface {
 	Open(ctx context.Context, repository, ref string) (fs.FS, error)
+}
+
+// ProjectGetter obtiene un proyecto por su ID (o ErrNotFound).
+type ProjectGetter interface {
+	Get(ctx context.Context, projectID string) (project.Project, error)
+}
+
+// DeploymentStore lee y actualiza despliegues existentes.
+type DeploymentStore interface {
+	GetDeployment(ctx context.Context, id string) (deployment.Deployment, error)
+	UpdateDeployment(ctx context.Context, d deployment.Deployment) error
+	ListByService(ctx context.Context, serviceID string) ([]deployment.Deployment, error)
 }

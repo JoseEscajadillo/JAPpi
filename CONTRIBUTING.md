@@ -44,23 +44,14 @@ go run ./services/control-plane/cmd/jappi-detect services/control-plane/testdata
 
 ## Preparar el entorno
 
-| Herramienta | Versión | Para qué |
-|-------------|---------|----------|
-| Go | la de `go.mod` | Servicios del backend |
-| Docker | reciente | NATS, Postgres y registry locales |
-| Node.js + pnpm | Node 22+, pnpm 9+ | Dashboard (`web/`) |
-| kubectl + k3d | opcional | Clúster local para probar el deployer |
+Guía completa, con instalación en Windows, macOS y Linux: [docs/development.md](docs/development.md).
 
 ```bash
-git clone <url-del-repo> && cd jappi
-docker compose -f deploy/docker-compose.dev.yml up -d   # NATS, Postgres, registry
-go test ./...                                           # todo en verde
-```
-
-Para ejecutar también las pruebas de integración contra NATS:
-
-```bash
-JAPPI_TEST_NATS_URL=nats://localhost:4222 go test ./pkg/eventbus/...
+git clone https://github.com/JoseEscajadillo/JAPpi.git && cd JAPpi
+./scripts/dev.sh check        # gofmt + vet + pruebas: no necesita nada más que Go
+./scripts/dev.sh infra-up     # NATS + Postgres en Docker
+./scripts/dev.sh cluster-up   # K3s local con k3d + registry en localhost:5001
+./scripts/dev.sh test-all     # incluye integración contra NATS y el clúster
 ```
 
 ## Mapa del repositorio
@@ -69,16 +60,21 @@ JAPPI_TEST_NATS_URL=nats://localhost:4222 go test ./pkg/eventbus/...
 jappi/
 ├── services/                 un directorio por microservicio (cada uno es un hexágono)
 │   ├── control-plane/        proyectos, despliegues, detector y cableado
-│   └── github-integration/   webhooks de GitHub → repo.pushed
+│   ├── github-integration/   webhooks de GitHub → repo.pushed
+│   └── deployer/             deploy.requested → Kubernetes (aislamiento por proyecto)
 ├── pkg/                      código compartido; NO lógica de negocio
 │   ├── contracts/events/     contratos de eventos (el "idioma común")
 │   ├── eventbus/             adaptadores del bus: natsbus, memory y su suite de contrato
 │   └── archtest/             hace cumplir las reglas hexagonales en go test
 ├── web/                      dashboard Next.js (Multi-Zones)
-├── deploy/                   docker-compose para desarrollo, manifiestos de K3s
+├── deploy/                   docker-compose y k3d para desarrollo, manifiestos de K3s
+├── scripts/dev.sh            tareas de desarrollo (check, infra, clúster, imágenes)
+├── Dockerfile                imagen de cualquier servicio (--build-arg SERVICE=...)
 ├── docs/
 │   ├── adr/                  decisiones de arquitectura
 │   ├── c4/                   diagramas C4 (contexto, contenedores, componentes, despliegue)
+│   ├── system-design.md      capacidad, cuellos de botella, escalado, SLO y costes
+│   ├── development.md        entorno de desarrollo
 │   ├── events.md             catálogo de eventos
 │   └── roadmap.md            fases y reparto de tareas
 └── .claude/skills/           skills de Claude Code del proyecto
@@ -185,7 +181,7 @@ La lógica depende de abstracciones; los detalles se inyectan desde fuera.
 | Casos de uso | `internal/app/*_test.go` | Adaptadores en memoria reales, no mocks generados |
 | Adaptadores de entrada | `adapters/in/**/*_test.go` | `httptest` + bus en memoria (ver `webhook_test.go`) |
 | Contrato | `pkg/**/xxxtest` | Una suite, varias implementaciones |
-| Integración | `*_test.go` con `t.Skip` si falta la variable de entorno | Contra NATS o Postgres reales de `docker compose` |
+| Integración | `*_test.go` con `t.Skip` si falta `JAPPI_TEST_*` | Contra NATS, Postgres o un Kubernetes real (la CI levanta kind) |
 | Arquitectura | `services/*/arch_test.go` | Obligatoria en todo servicio |
 
 Reglas:
@@ -284,6 +280,6 @@ Un PR está listo para revisión cuando:
 - [ ] Respeta las capas (lo garantiza `TestHexagonalRules`) y no hay llamadas HTTP entre servicios.
 - [ ] Los handlers de eventos nuevos son idempotentes y la descripción del PR explica por qué.
 - [ ] Ningún secreto en código, logs, eventos ni entorno de build.
-- [ ] Si hubo una decisión de arquitectura, está el ADR; si cambió la arquitectura, el C4; si hay un evento nuevo, `docs/events.md`.
+- [ ] Si hubo una decisión de arquitectura, está el ADR; si cambió la arquitectura, el C4; si hay un evento nuevo, `docs/events.md`; si cambió la capacidad, un cuello de botella o los costes, `docs/system-design.md`.
 - [ ] `docs/roadmap.md` refleja el avance.
 - [ ] La descripción del PR explica qué, por qué y cómo probarlo.

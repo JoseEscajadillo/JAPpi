@@ -1,0 +1,22 @@
+# Clúster K3s local (K3s dentro de Docker) que imita al de producción.
+#   k3d cluster create --config deploy/k3d/jappi-dev.yaml
+# Traefik queda en http://localhost:8080 y https://localhost:8443.
+# Las apps desplegadas responden en http://<servicio>-....jappi.localhost:8080
+# (*.localhost resuelve a 127.0.0.1 sin tocar el archivo hosts).
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: jappi-dev
+servers: 1
+agents: 1
+ports:
+  - port: 8080:80
+    nodeFilters: [loadbalancer]
+  - port: 8443:443
+    nodeFilters: [loadbalancer]
+# Registry donde el builder sube las imágenes y del que el clúster las descarga.
+# Desde tu máquina: localhost:5001. Desde el clúster: jappi-registry:5000.
+registries:
+  create:
+    name: jappi-registry
+    hostPort: "5001"

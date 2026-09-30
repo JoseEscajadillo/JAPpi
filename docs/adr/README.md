@@ -33,3 +33,5 @@ Escribe uno si la decisión cumple **al menos una** de estas condiciones:
 | [0008](0008-deteccion-de-monorepos-y-cableado-automatico.md) | Detección de monorepos y cableado automático de variables | Aceptado |
 | [0009](0009-dominios-reservados-antes-del-primer-deploy.md) | Dominios reservados antes del primer deploy | Aceptado |
 | [0010](0010-prueba-gratuita-con-tarjeta.md) | Prueba gratuita con tarjeta registrada | Propuesto |
+| [0011](0011-deployer-sin-estado-con-deploy-requested.md) | Deployer sin estado, alimentado por deploy.requested | Aceptado |
+| [0012](0012-aislamiento-de-proyectos-en-el-cluster.md) | Aislamiento de los proyectos en el clúster | Aceptado |

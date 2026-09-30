@@ -1,0 +1,79 @@
+# deployer en el clúster: cuenta de servicio con permisos mínimos + Deployment.
+# kubectl apply -f deploy/k8s/system.yaml -f deploy/k8s/deployer.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployer
+  namespace: jappi-system
+---
+# Solo lo que el deployer aplica o lee. Sin acceso a Secrets: los pods los
+# referencian, pero el deployer nunca necesita leer su contenido.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jappi-deployer
+rules:
+  - apiGroups: [""]
+    resources: [namespaces, resourcequotas, limitranges, services]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies, ingresses]
+    verbs: [get, list, watch, create, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jappi-deployer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: jappi-deployer
+subjects:
+  - kind: ServiceAccount
+    name: deployer
+    namespace: jappi-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployer
+  namespace: jappi-system
+  labels: { app.kubernetes.io/name: deployer, app.kubernetes.io/part-of: jappi }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: deployer }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: deployer, app.kubernetes.io/part-of: jappi }
+    spec:
+      serviceAccountName: deployer
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: deployer
+          # La CI publicará la imagen; mientras, ./scripts/dev.sh images.
+          image: ghcr.io/joseescajadillo/jappi-deployer:latest
+          env:
+            - { name: NATS_URL, value: "nats://nats.jappi-system:4222" }
+            - { name: RUNTIME_CLASS, value: "gvisor" }   # vacío si los nodos no tienen gVisor
+            - { name: INGRESS_CLASS, value: "traefik" }
+            - { name: INGRESS_NAMESPACE, value: "kube-system" }
+          ports:
+            - { name: http, containerPort: 8083 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
