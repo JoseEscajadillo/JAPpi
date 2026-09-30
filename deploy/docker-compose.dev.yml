@@ -1,0 +1,38 @@
+# Infraestructura mínima para desarrollar en local.
+#   docker compose -f deploy/docker-compose.dev.yml up -d
+# Credenciales solo de desarrollo: no reutilizar en ningún otro entorno.
+name: jappi-dev
+
+services:
+  nats:
+    image: nats:2.11-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "4222:4222"   # clientes
+      - "8222:8222"   # monitorización: http://localhost:8222
+    volumes:
+      - nats-data:/data
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: jappi
+      POSTGRES_PASSWORD: jappi-dev-only
+      POSTGRES_DB: jappi
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ../services/control-plane/migrations:/docker-entrypoint-initdb.d:ro
+
+  registry:
+    image: registry:3
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+
+volumes:
+  nats-data:
+  pg-data:
+  registry-data:

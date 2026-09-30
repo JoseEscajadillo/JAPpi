@@ -1,0 +1,23 @@
+# Go
+bin/
+*.exe
+*.test
+coverage.out
+
+# Node / Next.js
+node_modules/
+.next/
+.turbo/
+out/
+
+# Secretos locales
+.env
+.env.*
+!.env.example
+!services/control-plane/testdata/**/.env.example
+
+# Editores y SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
