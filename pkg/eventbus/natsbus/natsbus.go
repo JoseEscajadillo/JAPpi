@@ -36,6 +36,13 @@ type Bus struct {
 	nc     *nats.Conn
 	js     jetstream.JetStream
 	stream jetstream.Stream
+
+	// Workers es cuántos mensajes procesa a la vez cada suscripción. Por
+	// defecto 1. Súbelo en servicios cuyos handlers esperan mucho (el
+	// deployer vigila rollouts de minutos): con 1, un rollout lento
+	// bloquearía todos los demás. Los handlers ya son idempotentes y
+	// toleran desorden, así que procesar en paralelo es seguro.
+	Workers int
 }
 
 // Connect abre la conexión y crea (o actualiza) el stream.
@@ -88,11 +95,23 @@ func (b *Bus) Subscribe(ctx context.Context, consumer string, types []events.Typ
 		AckPolicy:      jetstream.AckExplicitPolicy,
 		AckWait:        ackWait,
 		MaxDeliver:     maxDeliver,
+		MaxAckPending:  max(b.Workers, 1) * 2,
 	})
 	if err != nil {
 		return fmt.Errorf("natsbus: consumidor %s: %w", consumer, err)
 	}
-	cc, err := cons.Consume(func(msg jetstream.Msg) { b.handle(ctx, consumer, msg, h) })
+	workers := max(b.Workers, 1)
+	sem := make(chan struct{}, workers)
+	// El callback de Consume se ejecuta de uno en uno: lanzamos cada
+	// mensaje en su goroutine y, cuando hay `workers` en curso, bloqueamos
+	// aquí (contrapresión: no se piden más mensajes al servidor).
+	cc, err := cons.Consume(func(msg jetstream.Msg) {
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem }()
+			b.handle(ctx, consumer, msg, h)
+		}()
+	})
 	if err != nil {
 		return fmt.Errorf("natsbus: consumir %s: %w", consumer, err)
 	}

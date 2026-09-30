@@ -45,13 +45,14 @@ C4Container
   Person(dev, "Desarrollador")
   System_Ext(github, "GitHub")
   System_Ext(stripe, "Stripe")
+  System_Ext(k3s, "Clúster K3s", "Namespaces prj-* aislados con las apps de los clientes (ADR-0012)")
 
   System_Boundary(jappi, "JAPpi") {
     Container(web, "Dashboard", "Next.js, Multi-Zones", "shell, console y billing (ADR-0005)")
     Container(cp, "control-plane", "Go", "Proyectos, servicios, variables, despliegues. Detector de monorepos y cableado (ADR-0008).")
     Container(gh, "github-integration", "Go", "Recibe y verifica los webhooks; publica repo.pushed.")
     Container(builder, "builder", "Go + BuildKit", "Construye imágenes OCI (Railpack o Dockerfile) y las sube al registry.")
-    Container(deployer, "deployer", "Go + client-go", "Reconcilia el estado deseado en K3s: Deployment, Service, Ingress, Secrets.")
+    Container(deployer, "deployer", "Go + client-go", "Sin estado (ADR-0011). Aplica namespace aislado, Deployment, Service e Ingress; vigila el rollout.")
     Container(addons, "addons", "Go", "Aprovisiona Postgres (CloudNativePG) y Redis por proyecto.")
     Container(billing, "billing", "Go", "Stripe: prueba, planes, cuotas.")
     Container(logs, "logs", "Go", "Transmite logs y métricas al dashboard (WebSocket).")
@@ -69,9 +70,10 @@ C4Container
   Rel(stripe, billing, "Webhooks", "HTTPS")
 
   Rel(gh, nats, "repo.pushed")
-  Rel(cp, nats, "build.requested, rollback.requested")
+  Rel(cp, nats, "build.requested, deploy.requested")
   Rel(builder, nats, "build.succeeded / build.failed")
-  Rel(deployer, nats, "deployment.status_changed")
+  Rel(deployer, nats, "consume deploy.requested; publica deployment.status_changed")
+  Rel(deployer, k3s, "Server-side apply", "API de Kubernetes")
   Rel(billing, nats, "subscription.changed")
 
   Rel(cp, db, "Lee/escribe")
@@ -123,6 +125,40 @@ C4Component
   Rel(pg, db, "SQL")
   Rel(repofs, uc_an, "Implementa RepoSource")
   Rel(evin, nats, "Consume")
+```
+
+---
+
+## Nivel 3: componentes del deployer
+
+Un hexágono sin estado (ADR-0011). Todas las decisiones de aislamiento y límites están en el dominio; el adaptador k8s solo traduce.
+
+```mermaid
+C4Component
+  title deployer: componentes
+
+  Container_Boundary(dep, "deployer") {
+    Component(evin, "adapters/in/events", "Consumidor NATS (16 workers)", "deploy.requested → Deploy")
+    Component(uc, "app.Deploy", "Caso de uso", "Publica deploying, aplica, vigila el rollout y publica healthy/failed. Serializa por servicio.")
+    Component(spec, "domain: Spec, Plan", "Dominio", "Valida (imagen por digest, nombres, variables) y decide nombres y labels")
+    Component(tiers, "domain: tiers", "Dominio", "Plan → cuotas y recursos por contenedor")
+    Component(iso, "domain: isolation", "Dominio", "Puertos de salida, redes bloqueadas, UID fijo")
+    Component(roll, "domain: Evaluate", "Dominio", "¿Terminó el rollout? CrashLoopBackOff, cuota, plazo...")
+    Component(k8s, "adapters/out/k8s", "client-go, server-side apply", "Implementa ProjectProvisioner, WorkloadApplier, RolloutReader")
+  }
+
+  ContainerQueue(nats, "NATS JetStream")
+  System_Ext(k3s, "API de Kubernetes")
+
+  Rel(nats, evin, "deploy.requested")
+  Rel(evin, uc, "Llama")
+  Rel(uc, spec, "Usa")
+  Rel(uc, roll, "Usa")
+  Rel(spec, tiers, "Usa")
+  Rel(k8s, iso, "Traduce")
+  Rel(k8s, uc, "Implementa sus puertos")
+  Rel(k8s, k3s, "Apply / Get / List")
+  Rel(uc, nats, "deployment.status_changed")
 ```
 
 ---
@@ -188,8 +224,12 @@ sequenceDiagram
   N->>B: build.requested
   B->>B: descarga el commit, construye con BuildEnv
   B->>N: build.succeeded (imagen@sha256)
-  N->>D: build.succeeded
-  D->>K: server-side apply (Deployment, Service, Ingress, Secret)
+  N->>CP: build.succeeded
+  CP->>CP: ¿hay uno más nuevo en producción? arma la especificación completa
+  CP->>N: deploy.requested (id = deploy-<deployment>)
+  N->>D: deploy.requested
+  D->>N: deployment.status_changed = deploying
+  D->>K: server-side apply (namespace + cuota + NetworkPolicy, Deployment, Service, Ingress)
   K-->>D: rollout listo y readiness OK
   D->>N: deployment.status_changed = healthy
   N->>CP: actualiza el historial (el anterior pasa a superseded)

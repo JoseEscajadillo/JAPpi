@@ -23,8 +23,8 @@ const (
 	BuildRequested          Type = "build.requested"
 	BuildSucceeded          Type = "build.succeeded"
 	BuildFailed             Type = "build.failed"
+	DeployRequested         Type = "deploy.requested"
 	DeploymentStatusChanged Type = "deployment.status_changed"
-	RollbackRequested       Type = "rollback.requested"
 	SubscriptionChanged     Type = "subscription.changed"
 )
 

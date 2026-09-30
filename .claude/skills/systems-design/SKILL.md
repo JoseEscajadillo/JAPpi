@@ -9,6 +9,7 @@ Esta skill convierte una petición ("quiero rollback", "añade Stripe") en un di
 
 - `docs/adr/` (decisiones; sobre todo 0002, 0006 y 0008);
 - `docs/c4/README.md` (arquitectura);
+- `docs/system-design.md` (capacidad, cuellos de botella, SLO y costes);
 - `docs/events.md` (contratos);
 - `CONTRIBUTING.md` (reglas de código).
 
@@ -52,6 +53,7 @@ Sigue los pasos en orden y **presenta el diseño al usuario antes de implementar
 
 - **ADR** (skill `new-adr`) si la decisión cumple los criterios de `docs/adr/README.md`.
 - **C4:** actualiza `docs/c4/README.md` si cambian contenedores, sistemas externos o relaciones.
+- **System Design:** si la funcionalidad cambia la carga esperada, crea o resuelve un cuello de botella, afecta a un SLO o cambia el coste por plan, actualiza `docs/system-design.md` (supuestos, cálculo y tabla afectada).
 - **Roadmap:** mueve la tarea en `docs/roadmap.md`.
 
 ### 7. Verificar
@@ -72,6 +74,7 @@ gofmt -l . && go vet ./... && go test ./...
 **Idempotencia:** <qué pasa con una reentrega>
 **Adaptadores:** in: <...>  out: <...>
 **Docs:** ADR <sí/no, por qué> · C4 <nivel afectado>
+**Escala:** <qué pasa con 10× la carga del §2 de system-design.md; ¿nuevo cuello de botella?>
 **Riesgos:** <seguridad, coste, aislamiento entre clientes>
 ```
 

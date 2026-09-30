@@ -49,8 +49,11 @@ func run() error {
 	store := memory.NewStore()
 
 	consumer := eventsin.Consumer{
-		Bus:        b,
-		HandlePush: app.HandlePush{Projects: store, Deployments: store, Events: b, Now: time.Now},
+		Bus:                    b,
+		HandlePush:             app.HandlePush{Projects: store, Deployments: store, Events: b, Now: time.Now},
+		HandleBuildSucceeded:   app.HandleBuildSucceeded{Projects: store, Deployments: store, Events: b, Now: time.Now},
+		HandleBuildFailed:      app.HandleBuildFailed{Deployments: store, Now: time.Now},
+		HandleDeploymentStatus: app.HandleDeploymentStatus{Deployments: store, Now: time.Now},
 	}
 	if err := consumer.Start(ctx); err != nil {
 		return err

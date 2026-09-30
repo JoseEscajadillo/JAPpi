@@ -16,7 +16,7 @@ $ go run ./services/control-plane/cmd/jappi-detect services/control-plane/testda
 
 ## Estado
 
-Fase 0 completada (cimientos). Ver la [hoja de ruta](docs/roadmap.md).
+Fase 1 en curso: el deployer ya lleva una imagen a Kubernetes con aislamiento por proyecto; faltan el builder y el VPS. Ver la [hoja de ruta](docs/roadmap.md).
 
 ## Arquitectura
 
@@ -27,16 +27,19 @@ Fase 0 completada (cimientos). Ver la [hoja de ruta](docs/roadmap.md).
 
 | Documento | Contenido |
 |-----------|-----------|
+| [docs/system-design.md](docs/system-design.md) | System Design: capacidad, cuellos de botella, escalado, SLO y costes por plan |
 | [docs/c4](docs/c4/README.md) | Diagramas C4: contexto, contenedores, componentes, despliegue y flujo de un push |
 | [docs/adr](docs/adr/README.md) | Decisiones de arquitectura y sus motivos |
 | [docs/events.md](docs/events.md) | Catálogo de eventos entre servicios |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Cómo trabajamos: hexagonal, SOLID, pruebas, Git, seguridad |
+| [docs/development.md](docs/development.md) | Entorno de desarrollo: herramientas, `scripts/dev.sh`, clúster local |
 
 ## Arranque rápido
 
 ```bash
-docker compose -f deploy/docker-compose.dev.yml up -d
-go test ./...
+./scripts/dev.sh check        # gofmt + vet + pruebas, sin dependencias
+./scripts/dev.sh infra-up     # NATS + Postgres
+./scripts/dev.sh cluster-up   # K3s local con k3d
 ```
 
 ## Planes

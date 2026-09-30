@@ -1,0 +1,17 @@
+# Piezas de la plataforma que no son un servicio de JAPpi.
+# kubectl apply -f deploy/k8s/system.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jappi-system
+  labels:
+    app.kubernetes.io/part-of: jappi
+    pod-security.kubernetes.io/enforce: restricted
+---
+# gVisor para el código de los clientes (ADR-0012). Requiere instalar runsc
+# en cada nodo y registrarlo en containerd (ver deploy/k8s/README.md).
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: gvisor
+handler: runsc

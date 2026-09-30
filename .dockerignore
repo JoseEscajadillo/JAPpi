@@ -1,0 +1,9 @@
+.git
+.github
+.claude
+docs
+web
+deploy
+bin
+**/testdata
+**/*_test.go

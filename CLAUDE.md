@@ -6,7 +6,7 @@ JAPpi es un PaaS (tipo Railway o Render) que despliega frontend + backend + Post
 
 - Si la tarea añade o cambia un servicio, un caso de uso, un evento o una tabla, usa la skill **systems-design**.
 - Para crear un servicio o un caso de uso, usa **hexagonal-service**. Para registrar una decisión, **new-adr**.
-- Reglas de código: `CONTRIBUTING.md`. Decisiones: `docs/adr/`. Arquitectura: `docs/c4/README.md`. Fase actual: `docs/roadmap.md`.
+- Reglas de código: `CONTRIBUTING.md`. Decisiones: `docs/adr/`. Arquitectura: `docs/c4/README.md`. Escalabilidad y costes: `docs/system-design.md`. Entorno: `docs/development.md`. Fase actual: `docs/roadmap.md`.
 
 ## Reglas que no se negocian
 
@@ -18,9 +18,10 @@ JAPpi es un PaaS (tipo Railway o Render) que despliega frontend + backend + Post
 ## Comandos
 
 ```bash
-gofmt -l . && go vet ./... && go test ./...
-go run ./services/control-plane/cmd/jappi-detect <carpeta>
-docker compose -f deploy/docker-compose.dev.yml up -d
+./scripts/dev.sh check          # gofmt + vet + pruebas
+./scripts/dev.sh detect <dir>   # qué detectaría JAPpi en un repo
+./scripts/dev.sh infra-up       # NATS + Postgres
+./scripts/dev.sh cluster-up     # K3s local (k3d)
 ```
 
 Comentarios y documentación en español; identificadores en inglés.

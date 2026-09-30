@@ -45,19 +45,53 @@ type BuildFailedPayload struct {
 	Reason       string `json:"reason"`
 }
 
+// DeployRequestedPayload lo publica control-plane cuando una imagen debe
+// ponerse en producción: tras un build correcto o en un rollback (que es
+// simplemente otro deploy con una imagen anterior). Lleva la especificación
+// completa, así el deployer no guarda estado (ADR-0011).
+type DeployRequestedPayload struct {
+	DeploymentID string   `json:"deployment_id"`
+	ProjectID    string   `json:"project_id"`
+	ServiceID    string   `json:"service_id"`
+	ServiceName  string   `json:"service_name"`
+	Image        string   `json:"image"` // registry/repo@sha256:...
+	Port         int      `json:"port"`
+	Domain       string   `json:"domain"`
+	Tier         string   `json:"tier"` // trial, hobby, pro, team
+	Env          []EnvVar `json:"env,omitempty"`
+}
+
+// EnvVar es una variable de entorno en tiempo de ejecución: un literal o una
+// referencia a un Secret de Kubernetes, nunca el valor de un secreto.
+type EnvVar struct {
+	Name      string     `json:"name"`
+	Value     string     `json:"value,omitempty"`
+	SecretRef *SecretRef `json:"secret_ref,omitempty"`
+}
+
+// SecretRef apunta a una clave de un Secret del namespace del proyecto.
+type SecretRef struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
+// AddonSecretName es el contrato entre addons (crea el Secret con las
+// credenciales) y control-plane (lo referencia): "jappi-addon-postgres".
+func AddonSecretName(addon string) string { return "jappi-addon-" + addon }
+
+// Estados que publica deployer en DeploymentStatusChangedPayload.Status.
+const (
+	StatusDeploying = "deploying"
+	StatusHealthy   = "healthy"
+	StatusFailed    = "failed"
+)
+
 // DeploymentStatusChangedPayload lo publica deployer en cada transición.
 type DeploymentStatusChangedPayload struct {
 	DeploymentID string `json:"deployment_id"`
 	ServiceID    string `json:"service_id"`
 	Status       string `json:"status"`
 	Detail       string `json:"detail,omitempty"`
-}
-
-// RollbackRequestedPayload lo publica control-plane cuando el usuario pide volver atrás.
-type RollbackRequestedPayload struct {
-	ServiceID          string `json:"service_id"`
-	TargetDeploymentID string `json:"target_deployment_id"`
-	RequestedBy        string `json:"requested_by"`
 }
 
 // SubscriptionChangedPayload lo publica billing al procesar un webhook de Stripe.

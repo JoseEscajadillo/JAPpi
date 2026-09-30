@@ -42,6 +42,7 @@ type Deployment struct {
 	CommitSHA string
 	Image     string // se conoce al terminar el build
 	Status    Status
+	Detail    string // último mensaje para el usuario ("CrashLoopBackOff: ...")
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -69,6 +70,41 @@ func (d *Deployment) TransitionTo(s Status, now time.Time) error {
 	d.Status = s
 	d.UpdatedAt = now
 	return nil
+}
+
+// happyPath es el orden normal de estados de un despliegue.
+var happyPath = []Status{Queued, Building, Deploying, Healthy}
+
+// AdvanceTo lleva el despliegue hasta target recorriendo los pasos
+// intermedios del camino normal. Los eventos pueden llegar desordenados o
+// repetidos (un "healthy" antes que su "deploying"), así que:
+//   - si el despliegue ya pasó por target, o ya terminó, no hace nada;
+//   - si target es Failed, falla desde cualquier estado no terminal previo a Healthy.
+//
+// Devuelve changed=false cuando el evento era viejo o repetido.
+func (d *Deployment) AdvanceTo(target Status, now time.Time) (changed bool, err error) {
+	if d.Terminal() || d.Status == target {
+		return false, nil
+	}
+	if target == Failed {
+		if d.Status == Healthy {
+			return false, nil // un fallo tardío no deshace un despliegue que ya sirvió
+		}
+		return true, d.TransitionTo(Failed, now)
+	}
+	from, to := slices.Index(happyPath, d.Status), slices.Index(happyPath, target)
+	if to < 0 {
+		return false, fmt.Errorf("%w: AdvanceTo solo admite estados del camino normal o failed, no %s", ErrInvalidTransition, target)
+	}
+	if from >= to {
+		return false, nil
+	}
+	for _, s := range happyPath[from+1 : to+1] {
+		if err := d.TransitionTo(s, now); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 // Terminal indica si el despliegue ya no cambiará de estado por sí solo.

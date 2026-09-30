@@ -29,7 +29,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -55,10 +55,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       JAPPI_TEST_NATS_URL: nats://localhost:4222
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -91,7 +90,7 @@ jobs:
           docker logs nats
           exit 1
 
-      # Ejecuta pruebas unitarias, de arquitectura, con race y de integración; publica cobertura.
+      # Ejecuta unitarias, arquitectura, race e integración; publica el resumen de cobertura.
       - name: Test and report coverage
         run: |
           go test -race -coverprofile=coverage.out ./...
@@ -100,8 +99,57 @@ jobs:
       - name: Check Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
-      # Compila cada servicio para detectar errores de compilación y enlace.
+      # Compila cada comando del monorepo, incluidos los servicios nuevos.
       - name: Build services
         run: |
-          go build -o "$RUNNER_TEMP/control-plane" ./services/control-plane/cmd/control-plane
-          go build -o "$RUNNER_TEMP/github-integration" ./services/github-integration/cmd/github-integration
+          for dir in services/*/cmd/*/; do
+            command_name="$(basename "$dir")"
+            go build -o "$RUNNER_TEMP/$command_name" "./${dir%/}"
+          done
+
+  kubernetes:
+    name: Deployer integration (kind)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Start kind cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          cluster_name: jappi-ci
+
+      - name: Run deployer integration tests
+        env:
+          JAPPI_TEST_KUBECONFIG: /home/runner/.kube/config
+        run: go test -count=1 -v -run Integration ./services/deployer/...
+
+      - name: Diagnose cluster on failure
+        if: failure()
+        run: |
+          kubectl get all,networkpolicies,resourcequotas -A -l app.kubernetes.io/managed-by=jappi || true
+          kubectl get events -A --sort-by=.lastTimestamp | tail -40 || true
+
+  images:
+    name: Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build service images
+        run: |
+          for dir in services/*/cmd/*/; do
+            service="$(basename "$dir")"
+            [ "$service" = "jappi-detect" ] && continue
+            echo "::group::$service"
+            docker build --build-arg SERVICE="$service" -t "jappi-$service:ci" .
+            echo "::endgroup::"
+          done
+          docker images | grep jappi-
