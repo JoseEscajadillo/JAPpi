@@ -37,7 +37,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer bus.Close()
+	defer func() {
+		if err := bus.Close(); err != nil {
+			slog.Error("cerrar conexión NATS", "err", err)
+		}
+	}()
 
 	handler := httpin.NewHandler(httpin.Webhook{
 		Secret:      []byte(secret),
