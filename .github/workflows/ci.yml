@@ -24,6 +24,8 @@ jobs:
     name: CodeQL SAST
     runs-on: ubuntu-latest
     permissions:
+      # CodeQL consulta su propia ejecución para informar resultados.
+      actions: read
       contents: read
       pull-requests: read
       security-events: write
