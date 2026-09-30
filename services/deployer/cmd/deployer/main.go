@@ -45,7 +45,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer bus.Close()
+	defer func() {
+		if err := bus.Close(); err != nil {
+			slog.Error("no se pudo cerrar el bus de eventos", "err", err)
+		}
+	}()
 	// Cada despliegue espera su rollout (hasta 6 min): se atienden varios a la vez.
 	bus.Workers = 16
 
