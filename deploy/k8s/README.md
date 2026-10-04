@@ -1,5 +1,7 @@
 # Despliegue de JAPpi en K3s
 
+> **Estado:** estos manifiestos corresponden a los binarios actuales. El Sprint 3 añadirá el backend Go único, la app Next.js y el entorno reproducible en Hetzner; Diego documentará sus pasos, backups y restauración. Ver [roadmap](../../docs/roadmap.md) y [ADR-0013](../../docs/adr/0013-monolito-modular-hasta-validar-el-producto.md).
+
 Estado: **borrador**, hasta tener el VPS (ver [roadmap](../../docs/roadmap.md)). El orden es importante.
 
 ## 1. Nodo servidor

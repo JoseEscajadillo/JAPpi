@@ -16,18 +16,19 @@ $ go run ./services/control-plane/cmd/jappi-detect services/control-plane/testda
 
 ## Estado
 
-Fase 1 en curso: el deployer ya lleva una imagen a Kubernetes con aislamiento por proyecto; faltan el builder y el VPS. Ver la [hoja de ruta](docs/roadmap.md).
+Etapa de producto en curso: el deployer ya lleva una imagen a Kubernetes con aislamiento por proyecto; faltan el builder, la API de proyectos, la aplicación web y el entorno de Hetzner. El [Sprint 3](docs/roadmap.md) organiza el primer golden path de extremo a extremo.
 
 ## Arquitectura
 
-- **Microservicios en Go** comunicados por eventos sobre **NATS JetStream**.
-- **Arquitectura hexagonal** en cada servicio, con las reglas comprobadas en las pruebas.
+- **Backend Go como monolito modular objetivo:** una API y un trabajador con PostgreSQL; los binarios actuales y NATS se consolidarán de forma incremental.
+- **Arquitectura hexagonal** dentro de cada módulo, con reglas comprobadas en las pruebas.
 - **K3s sobre VPS** como plano de datos: un namespace aislado por proyecto.
-- **Dashboard en Next.js** con Multi-Zones (microfrontends).
+- **Frontend como una sola aplicación Next.js modular**. Microservicios y Multi-Zones se evaluarán tras validar el producto ([ADR-0013](docs/adr/0013-monolito-modular-hasta-validar-el-producto.md)).
 
 | Documento | Contenido |
 |-----------|-----------|
 | [docs/system-design.md](docs/system-design.md) | System Design: capacidad, cuellos de botella, escalado, SLO y costes por plan |
+| [docs/api.md](docs/api.md) | Contrato REST de la primera integración entre frontend y backend |
 | [docs/c4](docs/c4/README.md) | Diagramas C4: contexto, contenedores, componentes, despliegue y flujo de un push |
 | [docs/adr](docs/adr/README.md) | Decisiones de arquitectura y sus motivos |
 | [docs/events.md](docs/events.md) | Catálogo de eventos entre servicios |

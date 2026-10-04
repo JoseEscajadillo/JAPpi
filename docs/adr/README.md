@@ -35,3 +35,6 @@ Escribe uno si la decisión cumple **al menos una** de estas condiciones:
 | [0010](0010-prueba-gratuita-con-tarjeta.md) | Prueba gratuita con tarjeta registrada | Propuesto |
 | [0011](0011-deployer-sin-estado-con-deploy-requested.md) | Deployer sin estado, alimentado por deploy.requested | Aceptado |
 | [0012](0012-aislamiento-de-proyectos-en-el-cluster.md) | Aislamiento de los proyectos en el clúster | Aceptado |
+| [0013](0013-monolito-modular-hasta-validar-el-producto.md) | Monolitos modulares hasta validar el producto; extracción posterior | Propuesto |
+
+Los ADR 0002, 0005 y 0011 describen decisiones que siguen reflejadas en el código actual. El ADR-0013 propone la arquitectura objetivo; al aprobarlo y completar la migración, se actualizará el estado histórico de esos ADR según el proceso anterior.

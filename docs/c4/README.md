@@ -4,6 +4,24 @@ Modelo [C4](https://c4model.com) en cuatro niveles de zoom. Los diagramas están
 
 > **Regla:** si un PR añade un servicio, un contenedor, un sistema externo o una relación nueva, actualiza el diagrama correspondiente en el mismo PR.
 
+> **Lectura temporal:** los diagramas detallados de `control-plane`, `deployer` y NATS más abajo describen el código actual o la antigua propuesta distribuida. El objetivo de la etapa 1 es el siguiente diagrama; la migración no está implementada todavía. Ver [ADR-0013](../adr/0013-monolito-modular-hasta-validar-el-producto.md) y [Sprint 3](../roadmap.md).
+
+## Objetivo de la etapa 1 · dos monolitos modulares
+
+```mermaid
+flowchart LR
+  U[Usuario] -->|HTTPS| W["Next.js único<br/>auth · projects · deployments"]
+  W -->|REST /api/v1| A["Go único<br/>identity · repositories · projects · builds · deployments"]
+  G[GitHub App] -->|Webhook HMAC| A
+  A -->|Datos y trabajos durables| P[(PostgreSQL)]
+  A -->|Job de build aislado| K[K3s en Hetzner]
+  K -->|Imagen por digest| R[(Registry OCI)]
+  A -->|Apply y readiness| K
+  K -->|HTTPS de la app| V[Visitante]
+```
+
+El backend ejecuta un solo proceso público con API y trabajador; el trabajo de clientes corre en Jobs aislados de K3s. Los módulos internos se llaman por interfaces Go y comparten transacciones PostgreSQL. La app Next.js es un solo artefacto. La separación en microservicios y Multi-Zones es una decisión posterior basada en mediciones, no una dependencia del golden path.
+
 ---
 
 ## Nivel 1: contexto del sistema
@@ -34,9 +52,9 @@ C4Context
 
 ---
 
-## Nivel 2: contenedores
+## Nivel 2: contenedores del diseño distribuido anterior
 
-Las piezas desplegables de JAPpi. Salvo el dashboard, todo se comunica por eventos a través de NATS (ADR-0002).
+Este diagrama conserva el diseño de microservicios y Multi-Zones como referencia histórica y posible punto de partida para la etapa 2. Algunas piezas existen en el repositorio; `builder`, `addons`, `billing`, `logs` y la UI de varias zonas siguen pendientes. No representa el despliegue objetivo del Sprint 3.
 
 ```mermaid
 C4Container
@@ -163,9 +181,9 @@ C4Component
 
 ---
 
-## Nivel 4: despliegue
+## Nivel 4: despliegue distribuido anterior
 
-Dónde corre cada cosa (ADR-0004).
+Diseño previo (ADR-0004). Diego documentará y verificará el despliegue del monolito en Hetzner durante el Sprint 3; este esquema no debe usarse como inventario de infraestructura ya instalada.
 
 ```mermaid
 C4Deployment
@@ -202,7 +220,7 @@ C4Deployment
 
 ---
 
-## Flujo dinámico: de un push a producción
+## Flujo dinámico del diseño distribuido anterior: de un push a producción
 
 ```mermaid
 sequenceDiagram

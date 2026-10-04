@@ -1,5 +1,7 @@
 # System Design de JAPpi
 
+> **Alcance de este documento:** los números y diagramas siguientes modelan principalmente la arquitectura distribuida de la **etapa 2** y son hipótesis, no infraestructura ya desplegada. La **etapa 1** usa backend Go y frontend Next.js como monolitos modulares sobre Hetzner, con PostgreSQL como base y cola de trabajos. Las prioridades y los criterios para pasar de etapa están en [roadmap](roadmap.md) y [ADR-0013](adr/0013-monolito-modular-hasta-validar-el-producto.md). Antes de extraer servicios se volverán a medir capacidad, SLO y costes reales del monolito.
+
 Este documento responde a **cómo escala JAPpi**:
 - cuánta carga esperamos;
 - qué pieza se rompe primero;
@@ -174,7 +176,9 @@ Horizonte de diseño: **1.000 proyectos activos a los 12 meses.**
 
 ---
 
-## 8. Etapas de crecimiento
+## 8. Modelo anterior de crecimiento distribuido
+
+Los nombres «Etapa 0/1/2» del esquema siguiente son escalas de capacidad del diseño previo, **no** los ciclos de producto y escala del [roadmap vigente](roadmap.md). No guían el orden de implementación del Sprint 3.
 
 ```mermaid
 flowchart LR
