@@ -6,12 +6,12 @@ JAPpi es un PaaS (tipo Railway o Render) que despliega frontend + backend + Post
 
 - Si la tarea añade o cambia un servicio, un caso de uso, un evento o una tabla, usa la skill **systems-design**.
 - Para crear un servicio o un caso de uso, usa **hexagonal-service**. Para registrar una decisión, **new-adr**.
-- Reglas de código: `CONTRIBUTING.md`. Decisiones: `docs/adr/`. Arquitectura: `docs/c4/README.md`. Escalabilidad y costes: `docs/system-design.md`. Entorno: `docs/development.md`. Fase actual: `docs/roadmap.md`.
+- Reglas de código: `CONTRIBUTING.md`. Decisiones: `docs/adr/0013-monolito-modular-hasta-validar-el-producto.md`. Arquitectura: `docs/c4/README.md`. Contrato REST: `docs/api.md`. Entorno: `docs/development.md`. Sprint actual: `docs/roadmap.md`.
 
 ## Reglas que no se negocian
 
-- Arquitectura hexagonal por servicio: `domain` → `app` → `adapters`/`cmd`. `TestHexagonalRules` lo comprueba; no se desactiva.
-- Entre servicios, solo eventos NATS (`pkg/contracts/events`). Los handlers son idempotentes.
+- Arquitectura hexagonal por módulo: `domain` → `app` → `adapters`/`cmd`. La prueba de arquitectura actual no se desactiva durante la migración.
+- Etapa 1: una API Go y una app Next.js modulares. Los módulos Go se llaman directamente; los trabajos se persisten en PostgreSQL. El código NATS actual se conserva solo hasta migrar su comportamiento con pruebas.
 - Los secretos nunca van en eventos, logs ni en el entorno de build.
 - El código de los clientes no es de confianza: siempre en su namespace, con cuota, NetworkPolicy y gVisor.
 

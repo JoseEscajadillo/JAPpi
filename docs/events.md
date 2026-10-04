@@ -1,5 +1,7 @@
 # Catálogo de eventos
 
+> **Estado actual:** estos contratos describen los binarios y NATS que ya existen. Para el producto de la etapa 1, los módulos del monolito se llaman directamente y los trabajos durables viven en PostgreSQL ([ADR-0013](adr/0013-monolito-modular-hasta-validar-el-producto.md)). No se añaden eventos nuevos para comunicar módulos dentro de un solo proceso. Este catálogo vuelve a ser contrato entre procesos si la etapa 2 necesita extraerlos.
+
 Contratos en [`pkg/contracts/events`](../pkg/contracts/events). Todos viajan dentro de un `Envelope` (`id`, `type`, `version`, `occurred_at`, `project_id`, `data`) por el stream `JAPPI` de NATS JetStream, en el subject `jappi.<type>`.
 
 | Tipo | Publica | Consumen | Cuándo |

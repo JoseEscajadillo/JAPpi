@@ -4,8 +4,8 @@ Gracias por sumarte. Este documento es el acuerdo del equipo sobre **cómo** con
 
 > **Versión corta:**
 > 1. Lee los [ADR](docs/adr/) y el [C4](docs/c4/README.md).
-> 2. Cada servicio es un hexágono.
-> 3. Entre servicios, solo eventos.
+> 2. Cada módulo separa dominio, aplicación y adaptadores.
+> 3. En la etapa de producto, los módulos se llaman dentro de un proceso; los trabajos se persisten.
 > 4. `go test ./...` en verde antes de pedir revisión.
 > 5. Una decisión importante → un ADR.
 
@@ -21,7 +21,7 @@ Gracias por sumarte. Este documento es el acuerdo del equipo sobre **cómo** con
 6. [Eventos entre servicios](#eventos-entre-servicios)
 7. [Pruebas](#pruebas)
 8. [Estilo de código Go](#estilo-de-código-go)
-9. [Frontend (Next.js Multi-Zones)](#frontend-nextjs-multi-zones)
+9. [Frontend (una aplicación Next.js modular)](#frontend-una-aplicación-nextjs-modular)
 10. [ADR y C4: documentar decisiones](#adr-y-c4-documentar-decisiones)
 11. [Flujo de Git y pull requests](#flujo-de-git-y-pull-requests)
 12. [Seguridad](#seguridad)
@@ -58,7 +58,7 @@ git clone https://github.com/JoseEscajadillo/JAPpi.git && cd JAPpi
 
 ```
 jappi/
-├── services/                 un directorio por microservicio (cada uno es un hexágono)
+├── services/                 binarios actuales; se consolidan de forma incremental
 │   ├── control-plane/        proyectos, despliegues, detector y cableado
 │   ├── github-integration/   webhooks de GitHub → repo.pushed
 │   └── deployer/             deploy.requested → Kubernetes (aislamiento por proyecto)
@@ -66,7 +66,7 @@ jappi/
 │   ├── contracts/events/     contratos de eventos (el "idioma común")
 │   ├── eventbus/             adaptadores del bus: natsbus, memory y su suite de contrato
 │   └── archtest/             hace cumplir las reglas hexagonales en go test
-├── web/                      dashboard Next.js (Multi-Zones)
+├── web/                      futura aplicación Next.js única y modular
 ├── deploy/                   docker-compose y k3d para desarrollo, manifiestos de K3s
 ├── scripts/dev.sh            tareas de desarrollo (check, infra, clúster, imágenes)
 ├── Dockerfile                imagen de cualquier servicio (--build-arg SERVICE=...)
@@ -75,6 +75,7 @@ jappi/
 │   ├── c4/                   diagramas C4 (contexto, contenedores, componentes, despliegue)
 │   ├── system-design.md      capacidad, cuellos de botella, escalado, SLO y costes
 │   ├── development.md        entorno de desarrollo
+│   ├── api.md                contrato REST para el frontend
 │   ├── events.md             catálogo de eventos
 │   └── roadmap.md            fases y reparto de tareas
 └── .claude/skills/           skills de Claude Code del proyecto
@@ -82,7 +83,7 @@ jappi/
 
 ## Arquitectura hexagonal
 
-Cada servicio separa **lo que decide** (dominio) de **cómo se conecta con el mundo** (adaptadores). Detalle y motivos en [ADR-0006](docs/adr/0006-arquitectura-hexagonal-y-solid.md).
+Cada módulo separa **lo que decide** (dominio) de **cómo se conecta con el mundo** (adaptadores). Los directorios `services/` muestran el código actual; el objetivo de `cmd/jappi` y módulos internos está en [ADR-0013](docs/adr/0013-monolito-modular-hasta-validar-el-producto.md). Detalle de las capas en [ADR-0006](docs/adr/0006-arquitectura-hexagonal-y-solid.md).
 
 ```
                 ┌───────────────────── services/<nombre> ─────────────────────┐
@@ -167,11 +168,11 @@ La lógica depende de abstracciones; los detalles se inyectan desde fuera.
 
 ## Eventos entre servicios
 
-- Los servicios **nunca** se llaman entre sí por HTTP; publican y consumen eventos en NATS JetStream ([ADR-0002](docs/adr/0002-microservicios-orientados-a-eventos-con-nats.md)).
+- El código actual publica y consume eventos NATS ([ADR-0002](docs/adr/0002-microservicios-orientados-a-eventos-con-nats.md)). En el monolito de la etapa 1 los módulos se llaman por interfaces Go y los trabajos se guardan en PostgreSQL; no se introduce NATS para comunicar paquetes del mismo proceso.
 - Contratos: `pkg/contracts/events`. Catálogo y reglas: [`docs/events.md`](docs/events.md).
-- **Todo handler es idempotente.** Pregúntate siempre: ¿qué pasa si este evento llega dos veces, o si mi handler falla a mitad de camino? Ejemplo: `HandlePush` usa IDs deterministas (`deployment.IDFor`) y publica con ID fijo (`build-<deploymentID>`).
+- **Todo webhook y trabajo es idempotente.** Pregúntate siempre: ¿qué pasa si el push llega dos veces o el trabajador se reinicia a mitad del build? El despliegue usa `deployment.IDFor` y la cola persistida evita perder el trabajo.
 - Error que no se arregla reintentando → `events.Permanent(err)`.
-- Los secretos **jamás** van en un evento.
+- Los secretos **jamás** van en un evento, trabajo serializado, log o imagen.
 
 ## Pruebas
 
@@ -204,22 +205,16 @@ Reglas:
 - **Idioma:** identificadores en inglés; comentarios, mensajes de error, logs y docs en español.
 - Comenta el **porqué**, no el qué. Ejemplo bueno, de `handle_push.go`: "Publicamos aunque el despliegue ya existiera: si el intento anterior falló justo después de guardar, el build nunca se pidió".
 
-## Frontend (Next.js Multi-Zones)
+## Frontend (una aplicación Next.js modular)
 
-El dashboard es un monorepo pnpm + Turborepo en `web/` con tres zonas independientes ([ADR-0005](docs/adr/0005-nextjs-multi-zones-para-microfrontends.md)):
-
-| Zona | Rutas | Qué contiene |
-|------|-------|--------------|
-| `web/apps/shell` | `/`, `/pricing`, `/docs` | Web pública y login; hace de *router* hacia las demás |
-| `web/apps/console` | `/app/*` | Proyectos, despliegues, logs, variables |
-| `web/apps/billing` | `/billing/*` | Planes y Stripe |
+El Sprint 3 crea **una app** Next.js en `web/`, con carpetas de funcionalidad (`auth`, `projects`, `deployments`) y una carpeta compartida. Su integración se define en [`docs/api.md`](docs/api.md). La UI de producto se decidirá después de que el contrato y el recorrido básico funcionen; [ADR-0013](docs/adr/0013-monolito-modular-hasta-validar-el-producto.md) explica la secuencia.
 
 Reglas:
 
-- **UI compartida** en `web/packages/ui`; **tipos de la API** en `web/packages/api-client`. Ninguna zona importa código de otra.
-- **Entre zonas se navega con `<a href>`**, no con `<Link>` (es otra app). Dentro de una zona, `<Link>`.
+- **Cliente y tipos de la API** en `web/src/shared`; cada funcionalidad consume ese cliente y no conoce rutas internas de otra.
+- Una sola navegación Next.js; no se crean zonas ni despliegues separados hasta la etapa de escala.
 - **Server Components por defecto.** `"use client"` solo donde haya interactividad.
-- **El navegador nunca habla con NATS ni con servicios internos:** solo con el control-plane (HTTP) y con el servicio de logs (WebSocket).
+- **El navegador habla solo con `/api/v1`**; no con NATS, PostgreSQL, Kubernetes ni GitHub usando credenciales del servidor.
 - **Variables `NEXT_PUBLIC_*`** solo para valores públicos. JAPpi se despliega a sí mismo, así que nuestro dashboard es el primer cliente del cableado automático.
 
 ## ADR y C4: documentar decisiones
@@ -277,9 +272,9 @@ Un PR está listo para revisión cuando:
 
 - [ ] `gofmt -l .` no lista nada; `go vet ./...` y `go test ./...` pasan.
 - [ ] La lógica nueva tiene pruebas y los bugs corregidos, su prueba de regresión.
-- [ ] Respeta las capas (lo garantiza `TestHexagonalRules`) y no hay llamadas HTTP entre servicios.
-- [ ] Los handlers de eventos nuevos son idempotentes y la descripción del PR explica por qué.
+- [ ] Respeta las capas (lo garantiza la prueba de arquitectura actual) y los límites entre módulos.
+- [ ] Webhooks y trabajos nuevos son idempotentes; la descripción del PR explica la clave y la recuperación.
 - [ ] Ningún secreto en código, logs, eventos ni entorno de build.
-- [ ] Si hubo una decisión de arquitectura, está el ADR; si cambió la arquitectura, el C4; si hay un evento nuevo, `docs/events.md`; si cambió la capacidad, un cuello de botella o los costes, `docs/system-design.md`.
+- [ ] Si cambió la API, se actualizó `docs/api.md`; si hubo una decisión de arquitectura, está el ADR; si cambió la arquitectura, el C4; si hay un evento nuevo, `docs/events.md`; si cambió la capacidad o el coste, `docs/system-design.md`.
 - [ ] `docs/roadmap.md` refleja el avance.
 - [ ] La descripción del PR explica qué, por qué y cómo probarlo.

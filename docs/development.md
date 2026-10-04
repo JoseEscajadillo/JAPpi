@@ -1,5 +1,7 @@
 # Entorno de desarrollo
 
+> **Estado:** los comandos siguientes ejecutan los binarios y NATS que existen hoy. El Sprint 3 consolidará el backend en `cmd/jappi`, con PostgreSQL como cola durable y una sola app Next.js; el nuevo comando de arranque se documentará cuando exista. No use estas instrucciones como prueba de que el monolito ya está implementado. Ver [roadmap](roadmap.md), [ADR-0013](adr/0013-monolito-modular-hasta-validar-el-producto.md) y [API](api.md).
+
 Todo se maneja con `./scripts/dev.sh`, que funciona en Linux, macOS y **Git Bash en Windows**. Ejecuta `./scripts/dev.sh help` para ver los comandos.
 
 ## 1. Herramientas
@@ -72,6 +74,8 @@ La CI las ejecuta todas en cada PR:
 - **job `images`:** build de las imágenes Docker.
 
 > En Windows, `go test -race` necesita un compilador de C (cgo). Si no lo tienes, la CI lo ejecuta por ti en Linux.
+
+Al integrar el monolito, la CI deberá añadir migraciones PostgreSQL desde cero, contrato REST, cola/reintentos, build aislado y el build/lint de `web/`. Estos checks pertenecen al Sprint 3 y todavía no existen.
 
 ## 6. Imágenes
 

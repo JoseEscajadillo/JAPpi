@@ -15,6 +15,7 @@
 - [ ] `./scripts/dev.sh check` pasa (gofmt, vet, pruebas)
 - [ ] Pruebas para la lógica nueva; prueba de regresión si es un bug
 - [ ] Handlers de eventos idempotentes (explica por qué abajo si aplica)
+- [ ] Si cambió la API pública, `docs/api.md` y sus ejemplos están actualizados
 - [ ] Ningún secreto en código, logs, eventos ni entorno de build
 - [ ] ADR / C4 / `docs/events.md` / `docs/system-design.md` actualizados si cambió la arquitectura
 - [ ] `docs/roadmap.md` refleja el avance
